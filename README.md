@@ -5,11 +5,11 @@ App estática y gratuita para seguir los conjuros conocidos y los espacios diari
 ## Funciones
 
 - Grimorio precargado con **14 conjuros** del bardo nivel 6, CAR 20.
-- Descripciones explicativas originales en español; acceso directo a **Archives of Nethys** para consultar el texto integral de cada conjuro.
+- Descripciones explicativas propias en español; cada ficha abre una búsqueda del conjuro en **d20PFSRD**, la fuente de reglas utilizada por la app.
 - Seguimiento de espacios gastados por nivel, botones para usar/recuperar y descanso diario.
 - Subida a nivel 7 (o cualquier nivel 1–20): calcula slots del bardo base y bonificaciones por Carisma, sin borrar conjuros.
 - Aviso de conjuros conocidos pendientes respecto de la tabla oficial (nivel 7: un conjuro nuevo de nivel 1 y dos de nivel 3).
-- Agregar conjuros desde un catálogo inicial o manualmente; editar descripciones/atributos, consultar y eliminar.
+- Agregar conjuros desde una selección rápida o manualmente; el catálogo completo de bardo se consulta en d20PFSRD. Editar descripciones/atributos, consultar y eliminar.
 - Filtros, búsqueda, exportar/importar un respaldo JSON.
 - Sin cuentas, sin anuncios, sin servidor ni base de datos externa. Persiste en localStorage en el mismo navegador/dispositivo.
 
@@ -29,8 +29,8 @@ No requiere Node ni instalar dependencias. Para probar PWA localmente, servir la
 
 - Los datos **no se sincronizan** entre dispositivos. Usar exportación/importación JSON para transferirlos. Limpiar los datos del navegador puede borrarlos.
 - De cara a múltiples personajes/jugadores: datos separados de la vista y estructura `characters`, preparado para extender con IDs y cuentas; sincronización requerirá otro almacenamiento.
-- El catálogo precargado es una selección breve, no el corpus completo de conjuros oficiales. Los nuevos conjuros admiten registro manual de su ficha.
-- Descripciones son resúmenes didácticos, no copias textuales. En caso de duda manda la fuente oficial.
+- El selector de la app es una selección breve, no una base completa ni una consulta en vivo. Para revisar el listado completo, usar [Bard Spells en d20PFSRD](https://www.d20pfsrd.com/magic/spell-lists-and-domains/spell-lists-bard/); luego se puede agregar el conjuro por nombre. d20PFSRD incluye una lista separada de conjuros de terceros.
+- Las descripciones son resúmenes didácticos propios, no copias textuales. d20PFSRD es la única referencia de reglas enlazada por esta app.
 - La CD se calcula como 10 + nivel del conjuro + modificador CAR, +1 para conjuro de Encantamiento con salvación si se activa Spell Focus. No se suma automáticamente a otros tipos de conjuros.
 - Se asume **bardo base** sin modificaciones de arquetipos, objetos o reglas caseras en cantidad de espacios diarios.
 
