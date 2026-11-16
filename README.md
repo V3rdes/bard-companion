@@ -8,7 +8,7 @@ App estática y gratuita para seguir los conjuros conocidos y los espacios diari
 - Descripciones explicativas propias en español; cada ficha abre una búsqueda del conjuro en **d20PFSRD**, la fuente de reglas utilizada por la app.
 - Seguimiento de espacios gastados por nivel, botones para usar/recuperar y descanso diario.
 - Subida a nivel 7 (o cualquier nivel 1–20): calcula slots del bardo base y bonificaciones por Carisma, sin borrar conjuros.
-- Aviso de conjuros conocidos pendientes respecto de la tabla oficial (nivel 7: un conjuro nuevo de nivel 1 y dos de nivel 3).
+- Aviso de conjuros conocidos pendientes según la progresión de bardo consultada en d20PFSRD (nivel 7: un conjuro nuevo de nivel 1 y dos de nivel 3).
 - Agregar conjuros desde una selección rápida o manualmente; el catálogo completo de bardo se consulta en d20PFSRD. Editar descripciones/atributos, consultar y eliminar.
 - Filtros, búsqueda, exportar/importar un respaldo JSON.
 - Sin cuentas, sin anuncios, sin servidor ni base de datos externa. Persiste en localStorage en el mismo navegador/dispositivo.
