@@ -7,6 +7,7 @@ App estática y gratuita para seguir los conjuros conocidos y los espacios diari
 - Grimorio precargado con **14 conjuros** del bardo nivel 6, CAR 20.
 - Descripciones explicativas propias en español; cada ficha abre una búsqueda del conjuro en **d20PFSRD**, la fuente de reglas utilizada por la app.
 - Seguimiento de espacios gastados por nivel, botones para usar/recuperar y descanso diario.
+- Cada ficha de conjuro indica qué dados tirar, qué salvación o prueba corresponde y cómo escalan sus efectos con el nivel de lanzador.
 - Subida a nivel 7 (o cualquier nivel 1–20): calcula slots del bardo base y bonificaciones por Carisma, sin borrar conjuros.
 - Aviso de conjuros conocidos pendientes según la progresión de bardo consultada en d20PFSRD (nivel 7: un conjuro nuevo de nivel 1 y dos de nivel 3).
 - Agregar conjuros desde una selección rápida o manualmente; el catálogo completo de bardo se consulta en d20PFSRD. Editar descripciones/atributos, consultar y eliminar.
