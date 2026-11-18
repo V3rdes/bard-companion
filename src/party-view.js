@@ -43,6 +43,7 @@ const PartyView = (() => {
             ${profileNumbers.map(([field, label, min, max]) =>
               numberInput('char-' + field, label, c[field], min, max, field === 'level' || field === 'cha')).join('')}
           </div>
+          <p class="muted">Ingresá atributos base. Los efectos de equipo y conjuros registrados se aplican desde «Efectos»; Combate muestra la puntuación final.</p>
           <h3>Conjuros y espacios</h3>
           <div class="field"><label for="char-spell-mode">Progresión de conjuros</label>
             <select id="char-spell-mode">
@@ -228,6 +229,7 @@ const PartyView = (() => {
       modal(`
         <button data-close class="btn sm close" aria-label="Cerrar">✕</button>
         <h2>${esc(character.name)}</h2>
+        ${(character.skills ?? []).some(skill => !skill.ability) ? '<p class="notice">Hay habilidades cargadas como totales manuales. Conservan el valor de la hoja y suman efectos registrados, pero sus atributos, rangos y penalizadores no se recalculan hasta completar el desglose.</p>' : ''}
         ${Object.entries(groups).map(([group, labels]) => `
           <section class="sheet-section">
             <div class="headrow"><h3>${labels.title}</h3>

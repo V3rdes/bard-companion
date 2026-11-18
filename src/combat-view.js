@@ -23,6 +23,8 @@ const CombatView = (() => {
     number('weight', 'Peso por unidad (lb)', 0, 1e9, { step: 'any' }),
     number('price', 'Precio por unidad (po)', 0, 1e9, { step: 'any' }),
     input('slot', 'Espacio o ubicación'),
+    number('charges', 'Cargas restantes (vacío si no aplica)', 0, 9999),
+    number('chargesMax', 'Cargas máximas', 0, 9999),
     check('carried', 'Está en la carga'), check('equipped', 'Equipado'),
   ];
   const weaponFields = [
@@ -34,12 +36,17 @@ const CombatView = (() => {
     number('damageCap', 'Tope positivo para arco compuesto'),
     number('enhancement', 'Mejora mágica'), check('masterwork', 'Gran calidad'), check('proficient', 'Tiene competencia'),
     input('damageType', 'Tipo de daño'), number('range', 'Incremento de alcance (pies)', 0, 9999),
+    check('fixedRange', 'El alcance es máximo fijo, sin incrementos'),
+    number('reach', 'Alcance cuerpo a cuerpo (pies)', 0, 9999),
+    check('touchAttack', 'Ataque contra CA de toque'), check('criticalDisabled', 'No admite críticos'),
     input('ammunition', 'Munición'), number('critMin', 'Amenaza de crítico desde', 1, 20),
     number('critMultiplier', 'Multiplicador de crítico', 2, 9),
     number('attackAdjustment', 'Ajuste de ataque', -99, 99), number('damageAdjustment', 'Ajuste de daño', -99, 99),
     check('singleAttack', 'Sin ataques iterativos con esta arma'),
+    check('standardActionAttack', 'Cada ataque requiere una acción estándar (no admite ataque completo)'),
   ];
   const armorFields = [
+    select('armorCategory', 'Tipo de armadura', { '': 'Sin transcribir', light: 'Ligera', medium: 'Media', heavy: 'Pesada' }),
     number('acBonus', 'Bonificador base a CA'), number('enhancement', 'Mejora mágica'),
     number('dexCap', 'Máximo de Destreza (vacío si no aplica)'),
     number('checkPenalty', 'Penalizador de armadura (valor negativo)', -99, 0),
@@ -128,10 +135,15 @@ const CombatView = (() => {
 
     function weaponPanel(stats, item) {
       const data = Rules.weapon(stats, item);
-      const critical = item.critMin == null && item.critMultiplier == null ? '' :
+      const critical = item.criticalDisabled ? 'No aplica' : item.critMin == null && item.critMultiplier == null ? '' :
         (item.critMin && item.critMin < 20 ? item.critMin + '–20' : '20') + ' / ×' + (item.critMultiplier ?? 2);
       const information = [critical && 'Crítico ' + critical, item.damageType,
-        item.range ? 'Incremento ' + item.range + ' pies' : '', item.ammunition && 'Munición ' + item.ammunition].filter(Boolean);
+        item.range ? (item.fixedRange ? 'Alcance máximo ' : 'Incremento ') + item.range + ' pies' : '',
+        item.reach ? 'Alcance cuerpo a cuerpo ' + item.reach + ' pies' : '',
+        item.touchAttack ? 'Contra CA de toque' : '',
+        item.standardActionAttack ? 'Acción estándar por ataque' : '',
+        item.charges != null ? 'Cargas ' + item.charges + (item.chargesMax != null ? ' / ' + item.chargesMax : '') : '',
+        item.ammunition && 'Munición ' + item.ammunition].filter(Boolean);
       return `<div class="sheet-section">
         <div class="headrow"><h3>${esc(item.name)}</h3>${sourceLink(item)}</div>
         ${information.length ? '<p class="muted">' + esc(information.join(' · ')) + '</p>' : ''}
@@ -146,11 +158,14 @@ const CombatView = (() => {
     function overview(character, onChange) {
       const stats = Rules.sheet(character);
       const { defense, maneuvers, worn, carried, saving } = stats;
-      const weapons = (character.inventory ?? []).filter(item => item.kind === 'weapon' && item.equipped);
+      const weapons = (character.inventory ?? []).filter(item => item.kind === 'weapon');
+      const differences = Rules.compareWithSheet(character, stats).filter(row => row.difference != null && row.difference !== 0);
       modal(`${close}<h2>Combate · ${esc(character.name)}</h2>
         <div class="headrow"><span class="muted">Usá «Editar perfil» para cargar los atributos o el tamaño.</span>
           <div class="row"><button class="btn sm" id="combat-compare">Revisar con la hoja</button>
           <button class="btn sm" id="combat-bases">Bases y ajustes</button></div></div>
+        <p><strong>PG ${character.hpCurrent ?? '—'} / ${character.hpMax ?? '—'}</strong></p>
+        ${differences.length ? '<p class="notice">Hay diferencias con la hoja: ' + esc(differences.map(row => row.label + ' ' + row.recorded + ' → cálculo ' + row.total).join(' · ')) + '. Revisá los componentes en «Revisar con la hoja».</p>' : ''}
         <div class="combat-stats">
           ${Object.entries(stats.scores).map(([name, score]) => result(Rules.attributes[name], score, {
             display: score.total == null ? '—' : score.total + ' (' + Rules.signed(stats.ability(name).value) + ')',
@@ -167,10 +182,11 @@ const CombatView = (() => {
           ${result('Ataque base', Rules.apply([stats.baseAttack]))}
           ${result('BMC', maneuvers.cmb, { roll: 'd20' })}${result('DMC', maneuvers.cmd)}
         </div>
-        <p class="muted">Velocidad ${stats.movement == null ? 'sin cargar' : stats.movement + ' pies'}${stats.speed != null && stats.speed !== stats.movement ? ' de ' + stats.speed + ' pies base' : ''} · Penalizador de pruebas ${Rules.signed(Math.min(worn.checkPenalty, carried.checkPenalty))} · Fallo arcano del equipo ${Math.min(100, worn.failure)}%</p>
+        <p class="muted">Velocidad ${stats.movement == null ? 'sin cargar' : stats.movement + ' pies'}${stats.speed != null && stats.speed !== stats.movement ? ' de ' + stats.speed + ' pies base' : ''} · Penalizador de pruebas ${Rules.signed(Math.min(worn.checkPenalty, carried.checkPenalty))} · Fallo arcano para estos conjuros ${Math.min(100, worn.castingFailure)}% (equipo: ${Math.min(100, worn.failure)}%)</p>
+        ${worn.unknownArmor ? '<p class="notice">Falta transcribir el tipo de armadura para aplicar la exención del bardo al fallo arcano.</p>' : ''}
         ${carried.missingWeights.length ? '<p class="notice">Carga calculada con los pesos conocidos. Hay ' + carried.missingWeights.length + ' objetos con peso pendiente de cargar.</p>' : ''}
-        <h3>Armas equipadas</h3>
-        ${weapons.length ? weapons.map(item => weaponPanel(stats, item)).join('') : '<p class="muted">Equipá un arma desde «Equipo» para consultar sus tiradas.</p>'}
+        <h3>Armas y ataques registrados</h3>
+        ${weapons.length ? weapons.map(item => '<p class="smalllabel">' + (item.equipped ? 'Equipada' : item.carried ? 'En la carga · equipar para usar' : 'Guardada') + '</p>' + weaponPanel(stats, item)).join('') : '<p class="muted">Cargá tus armas desde «Equipo» para consultar sus tiradas.</p>'}
         <p>${link(documentation.combat, 'Reglas de combate en d20PFSRD')}</p>`, 'Combate');
       byId('combat-bases').onclick = () => profileSettings(character, onChange, () => overview(character, onChange));
       byId('combat-compare').onclick = () => comparison(character, onChange);
@@ -238,8 +254,12 @@ const CombatView = (() => {
       update();
       byId('combat-equipment').onsubmit = event => {
         event.preventDefault();
-        const next = { id: item?.id ?? Party.newId(), ...read([...common, ...extraFor(category.value), ...references], event.currentTarget) };
+        const next = { ...item, id: item?.id ?? Party.newId(), ...read([...common, ...extraFor(category.value), ...references], event.currentTarget) };
         if (!next.name) return;
+        if (next.charges != null && next.chargesMax != null && next.charges > next.chargesMax) {
+          alert('Las cargas restantes no pueden superar las máximas.');
+          return;
+        }
         if (next.equipped) next.carried = true;
         CombatData.putItem(character, next);
         onChange('Equipo guardado');
@@ -297,7 +317,11 @@ const CombatView = (() => {
             <div class="muted">${Rules.categories[item.kind]} ×${item.quantity} · ${item.weight == null ? 'Peso pendiente' : amount.format(item.weight) + ' lb/u'}
               ${item.price == null ? '' : ' · ' + amount.format(item.price) + ' po/u'}${item.slot ? ' · ' + esc(item.slot) : ''}
               · ${item.equipped ? 'Equipado' : item.carried ? 'En la carga' : 'Guardado'}
+              ${item.charges != null ? ' · Cargas ' + item.charges + (item.chargesMax != null ? ' / ' + item.chargesMax : '') : ''}
             </div>
+            ${item.kind === 'armor' || item.kind === 'shield' ? '<p class="muted">CA +' + ((item.acBonus ?? 0) + (item.enhancement ?? 0)) +
+              ' · Máximo Des ' + (item.dexCap == null ? 'sin transcribir' : '+' + item.dexCap) +
+              ' · Penalizador ' + Rules.signed(item.checkPenalty ?? 0) + ' · Fallo arcano ' + (item.arcaneFailure ?? 0) + '%</p>' : ''}
             ${item.notes ? '<p class="rule-text">' + esc(item.notes) + '</p>' : ''}
             <div class="row sheet-actions">
               <button class="btn sm" data-item="${index}" data-item-action="edit">Editar</button>

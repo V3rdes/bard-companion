@@ -150,11 +150,12 @@ const BardUI = (() => {
         return;
       }
       const slotLevels = Party.spellLevels.filter(level => totalSlots(c, level) > 0 || c.spent[level] > 0);
-      byId('hero-subtitle').textContent = `${c.name} · Nivel ${c.level} · Carisma ${c.cha}`;
+      const effectiveCharisma = CombatRules.sheet(c).scores.cha.total;
+      byId('hero-subtitle').textContent = `${c.name} · Nivel ${c.level} · Carisma ${effectiveCharisma}`;
       byId('summary-level').textContent = c.level;
       byId('summary-class').textContent = [c.className, c.ancestry].filter(Boolean).join(' · ');
       byId('summary-known').textContent = c.spells.length;
-      byId('summary-cha').textContent = c.cha;
+      byId('summary-cha').textContent = effectiveCharisma;
       byId('summary-left').textContent = slotLevels.reduce((sum, level) => sum + remainingSlots(c, level), 0);
       const restDate = c.lastRest ? new Date(c.lastRest) : null;
       byId('last-rest').textContent = restDate && !Number.isNaN(restDate.valueOf())
@@ -494,10 +495,15 @@ const BardUI = (() => {
     });
     byId('add-spell').onclick = () => addModal();
     byId('edit-profile').onclick = () => editProfile(character());
-    byId('edit-sheet').onclick = () => partyView.entries(character(), message => save(message));
-    byId('show-combat').onclick = () => combatView.overview(character(), message => save(message));
-    byId('show-inventory').onclick = () => combatView.inventory(character(), message => save(message));
-    byId('show-effects').onclick = () => combatView.effects(character(), message => save(message));
+    function saveSheet(message) {
+      const pending = save(message);
+      render();
+      return pending;
+    }
+    byId('edit-sheet').onclick = () => partyView.entries(character(), saveSheet);
+    byId('show-combat').onclick = () => combatView.overview(character(), saveSheet);
+    byId('show-inventory').onclick = () => combatView.inventory(character(), saveSheet);
+    byId('show-effects').onclick = () => combatView.effects(character(), saveSheet);
     byId('update-level').onclick = () => {
       const selected = character();
       levelView.show(selected, {

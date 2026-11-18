@@ -19,7 +19,10 @@ const CombatData = (() => {
       optionalFields(item, ['weight', 'price'], value => isNumber(value, 0, 1e9)) &&
       optionalFields(item, ['enhancement', 'damageCap', 'acBonus', 'dexCap'], value => integer(value, 0, 99)) &&
       optionalFields(item, ['attackAdjustment', 'damageAdjustment'], value => integer(value, -99, 99)) &&
-      optionalFields(item, ['proficient', 'masterwork', 'singleAttack', 'slows'], value => typeof value === 'boolean') &&
+      optionalFields(item, ['proficient', 'masterwork', 'singleAttack', 'slows', 'touchAttack', 'fixedRange', 'criticalDisabled', 'standardActionAttack'], value => typeof value === 'boolean') &&
+      optionalFields(item, ['charges', 'chargesMax', 'reach'], value => integer(value, 0, 9999)) &&
+      (item.charges == null || item.chargesMax == null || item.charges <= item.chargesMax) &&
+      optional(item.armorCategory, value => ['light', 'medium', 'heavy'].includes(value)) &&
       optionalFields(item, ['notes', 'url', 'slot', 'damageType', 'ammunition'], value => typeof value === 'string') &&
       optionalFields(item, ['attackAbility', 'damageAbility'], value => has(CombatRules.attributes, value)) &&
       optional(item.mode, value => has(CombatRules.modes, value)) &&

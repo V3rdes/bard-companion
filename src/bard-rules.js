@@ -45,7 +45,9 @@ const BardRules = (() => {
   };
 
   function charismaModifier(character) {
-    return Math.floor((character.cha - 10) / 2);
+    // El mismo Carisma efectivo gobierna atributos, CD y espacios diarios.
+    const score = typeof CombatRules === 'undefined' ? character.cha : CombatRules.sheet(character).scores.cha.total;
+    return Math.floor((score - 10) / 2);
   }
 
   function totalSlots(character, level) {

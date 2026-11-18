@@ -21,7 +21,9 @@ const CombatRules = (() => {
     ac: 'CA', touch: 'CA de toque', flat: 'CA desprevenido', initiative: 'Iniciativa',
     attack: 'Ataque (todos)', melee: 'Ataque cuerpo a cuerpo', ranged: 'Ataque a distancia',
     damage: 'Daño', saves: 'Salvaciones (todas)', ...savingThrows, cmb: 'BMC', cmd: 'DMC',
-    skills: 'Habilidades (todas)', spellDc: 'CD de conjuros', extraAttack: 'Ataques adicionales en ataque completo',
+    skills: 'Habilidades (todas)', spellDc: 'CD de conjuros',
+    'spellDc:encantamiento': 'CD de Encantamiento', speed: 'Velocidad (pies)',
+    extraAttack: 'Ataques adicionales en ataque completo',
     ...Object.fromEntries(Party.attributes.map(([key, label]) => ['ability:' + key, label + ' (puntuación)'])),
   };
   const modes = { melee: 'Cuerpo a cuerpo', thrown: 'Arrojadiza', ranged: 'A distancia' };
@@ -154,7 +156,11 @@ const CombatRules = (() => {
     const armorCaps = protection.filter(item => item.dexCap != null).map(item => part(item.name, item.dexCap));
     const slows = protection.some(item => item.kind === 'armor' && item.slows);
     const failure = protection.reduce((total, item) => total + (item.arcaneFailure ?? 0), 0);
-    return { bonus, checkPenalty, untrained, armorCaps, slows, failure };
+    const bard = character.spellMode !== 'manual' && ['bardo', 'bard'].includes(normalize(character.className));
+    const castingFailure = protection.reduce((total, item) => total +
+      (bard && (item.kind === 'shield' || item.armorCategory === 'light') ? 0 : (item.arcaneFailure ?? 0)), 0);
+    const unknownArmor = bard && protection.some(item => item.kind === 'armor' && !item.armorCategory);
+    return { bonus, checkPenalty, untrained, armorCaps, slows, failure, castingFailure, unknownArmor };
   }
 
   function sheet(character) {
@@ -215,7 +221,10 @@ const CombatRules = (() => {
     const feet = /^(\d+)\s*(?:ft\.?|pies)?$/i.exec(speedText);
     const speed = settings.landSpeed ?? (feet ? Number(feet[1]) : null);
     const reduced = speed != null && !settings.ignoreSpeed && (worn.slows || ['Media', 'Pesada'].includes(carried.tier));
-    const movement = carried.overloaded ? (carried.tier === 'Sobrecarga' ? 5 : 0) : reduced ? Math.ceil(speed * 2 / 15) * 5 : speed;
+    const movementBase = carried.overloaded ? (carried.tier === 'Sobrecarga' ? 5 : 0) : reduced ? Math.ceil(speed * 2 / 15) * 5 : speed;
+    const speedBonus = apply([], affecting('speed')).total;
+    const movement = movementBase == null ? null : carried.overloaded ? movementBase :
+      movementBase + Math.min(movementBase, speedBonus);
     const initiative = apply([ability('dexterity'), ...worn.untrained], affecting('initiative'));
     return { scores, ability, defense, initiative, bab, saving, maneuvers, skills, carried, worn,
       movement, speed, sizeNormal, baseAttack, affecting };
@@ -253,9 +262,9 @@ const CombatRules = (() => {
       : apply([part(damageAbility.label, damageModifier), part('Ajuste manual', item.damageAdjustment ?? 0)],
         affecting('damage').concat(weaponEffect(enhancement, 'Mejora del arma')));
     const attacks = attack.total == null ? [] : Array.from(
-      { length: item.singleAttack ? 1 : Math.min(4, Math.max(1, Math.ceil(bab / 5))) },
+      { length: item.singleAttack || item.standardActionAttack ? 1 : Math.min(4, Math.max(1, Math.ceil(bab / 5))) },
       (_, index) => expression('d20', attack.total - index * 5));
-    const extra = apply([], affecting('extraAttack'));
+    const extra = apply([], item.standardActionAttack ? [] : affecting('extraAttack'));
     return { attack, attacks, extra, damage, damageExpression: expression(item.damageDice, damage.total) };
   }
 
@@ -271,7 +280,7 @@ const CombatRules = (() => {
       part('Base', 10), part('Nivel del conjuro', spell.l),
       part(attributes[attribute] ?? 'Ajuste de lanzamiento', base.modifier),
       part('Spell Focus', base.focus),
-    ], effects.filter(effect => effect.target === 'spellDc'));
+    ], effects.filter(effect => effect.target === 'spellDc' || effect.target === 'spellDc:' + normalize(spell.school)));
   }
 
   function compareWithSheet(character, stats = sheet(character)) {
