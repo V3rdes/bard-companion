@@ -1,6 +1,7 @@
 'use strict';
 
 const SDK_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/+esm';
+const PUBLIC_APP_URL = 'https://v3rdes.github.io/bard-companion/#campana';
 const byId = id => document.getElementById(id);
 let activeUI;
 let client;
@@ -106,9 +107,17 @@ if (location.protocol.startsWith('http') && configured) {
   window.addEventListener('focus', startCampaign);
   window.addEventListener('pagehide', () => clearInterval(retry), { once: true });
 } else if (location.protocol === 'file:') {
-  byId('app-workspace').hidden = false;
-  syncStatus('Archivo local · Este respaldo no está conectado a la campaña compartida.');
-  activeUI = BardUI.mount(LocalRepository.create());
+  if (location.hash === '#respaldo') {
+    byId('campaign-auth').hidden = false;
+    byId('campaign-title').textContent = 'Recuperar respaldo anterior';
+    byId('campaign-status').textContent = 'Podés exportar los datos antiguos de este archivo. La ficha que se usa ahora está en la campaña compartida.';
+    byId('campaign-bar').classList.remove('hidden');
+    byId('open-campaign').textContent = 'Abrir app compartida';
+    byId('open-campaign').onclick = () => location.assign(PUBLIC_APP_URL);
+  } else {
+    syncStatus('Abriendo la campaña compartida…');
+    location.replace(PUBLIC_APP_URL);
+  }
 } else {
   byId('campaign-auth').hidden = false;
   byId('campaign-status').textContent = 'Falta configurar la conexión de la campaña.';

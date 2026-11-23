@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'bard-companion-static-';
-const CACHE = CACHE_PREFIX + 'v15';
+const CACHE = CACHE_PREFIX + 'v16';
 const ASSETS = [
   './',
   './index.html',
