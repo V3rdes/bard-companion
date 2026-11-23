@@ -502,6 +502,7 @@ const BardUI = (() => {
     }
     byId('edit-sheet').onclick = () => partyView.entries(character(), saveSheet);
     byId('show-combat').onclick = () => combatView.overview(character(), saveSheet);
+    byId('show-weapons').onclick = () => combatView.weapons(character(), saveSheet);
     byId('show-inventory').onclick = () => combatView.inventory(character(), saveSheet);
     byId('show-effects').onclick = () => combatView.effects(character(), saveSheet);
     byId('update-level').onclick = () => {

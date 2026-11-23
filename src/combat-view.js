@@ -61,7 +61,7 @@ const CombatView = (() => {
   function create({ modal, esc }) {
     const close = '<button data-close class="btn sm close" aria-label="Cerrar">✕</button>';
     const link = (url, label) => `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(label)} ↗</a>`;
-    const sourceLink = entry => link(Rules.ruleLink(entry), entry.apiSourceUrl ? 'Fuente API' : 'd20PFSRD');
+    const sourceLink = entry => link(Rules.ruleLink(entry), entry.apiSourceUrl ? 'Fuente API' : 'Ver regla');
     const optionList = (choices, current) => Object.entries(choices).map(([value, label]) =>
       `<option value="${esc(value)}" ${String(current ?? '') === value ? 'selected' : ''}>${esc(label)}</option>`).join('');
 
@@ -151,8 +151,43 @@ const CombatView = (() => {
         ${data.attacks.length > 1 ? '<p class="muted">Ataque completo · ' + esc(data.attacks.join(' / ')) + '</p>' : ''}
         ${data.extra.total > 0 ? result('Ataques adicionales al máximo', data.extra) : ''}
         ${result('Daño', data.damage, { display: data.damageExpression })}
-        ${item.notes ? '<p class="rule-text">' + esc(item.notes) + '</p>' : ''}
+        ${item.notes ? '<details><summary>Notas y uso</summary><p class="rule-text">' + esc(item.notes) + '</p></details>' : ''}
       </div>`;
+    }
+
+    function weapons(character, onChange) {
+      const stats = Rules.sheet(character);
+      const items = (character.inventory ?? []).filter(item => item.kind === 'weapon');
+      const back = () => weapons(character, onChange);
+      modal(`${close}<h2>Armas · ${esc(character.name)}</h2>
+        <div class="headrow"><span class="muted">${items.length} armas y ataques registrados</span>
+          <button class="btn primary" id="weapon-add">Agregar arma</button></div>
+        <p class="muted">Ataque y daño con tus atributos y efectos activos. Abrí cada tirada para ver el desglose; los dados los tirás fuera de la app.</p>
+        ${items.length ? items.map(item => `<article data-weapon-id="${esc(item.id)}">
+          ${weaponPanel(stats, item)}
+          <p class="muted">${esc(Rules.modes[item.mode] ?? 'Tipo de ataque por completar')} · Cantidad ${item.quantity}
+            · ${item.equipped ? 'Equipada' : item.carried ? 'En la carga' : 'Guardada'}
+            ${item.weight == null ? ' · Peso pendiente' : ' · ' + amount.format(item.weight) + ' lb/u'}
+            ${item.price == null ? '' : ' · ' + amount.format(item.price) + ' po/u'}
+          </p>
+          <div class="row sheet-actions">
+            <button class="btn sm" data-weapon-action="edit">Editar arma</button>
+            <button class="btn sm" data-weapon-action="equip">${item.equipped ? 'Desequipar' : 'Equipar'}</button>
+          </div>
+        </article>`).join('') : '<p class="empty">Todavía no hay armas cargadas para este personaje. Agregá las de su hoja para ver sus datos y tiradas.</p>'}`, 'Armas del personaje');
+      byId('weapon-add').onclick = () => equipmentForm(character, null, onChange, { kind: 'weapon', back });
+      byId('backdrop').addEventListener('click', event => {
+        const button = event.target.closest('[data-weapon-action]');
+        if (!button) return;
+        const item = items.find(entry => entry.id === button.closest('[data-weapon-id]').dataset.weaponId);
+        if (!item) return;
+        if (button.dataset.weaponAction === 'edit') equipmentForm(character, item, onChange, { back });
+        else {
+          CombatData.putItem(character, { ...item, equipped: !item.equipped, carried: true });
+          onChange(item.equipped ? 'Arma desequipada' : 'Arma equipada');
+          back();
+        }
+      });
     }
 
     function overview(character, onChange) {
@@ -231,11 +266,13 @@ const CombatView = (() => {
       character[key] = next;
     }
 
-    function equipmentForm(character, item, onChange) {
-      const record = item ?? { kind: 'equipment', quantity: 1, carried: true, proficient: true };
+    function equipmentForm(character, item, onChange, options = {}) {
+      const back = options.back ?? (() => inventory(character, onChange));
+      const record = item ?? { kind: options.kind ?? 'equipment', quantity: 1, carried: true, proficient: true };
+      const title = (item ? 'Editar ' : 'Agregar ') + (record.kind === 'weapon' ? 'arma' : 'equipo');
       const extraFor = kind => kind === 'weapon' ? weaponFields : kind === 'shield' ? armorFields :
         kind === 'armor' ? [...armorFields, check('slows', 'Reduce la velocidad (armadura media o pesada)')] : [];
-      modal(`${close}<h2>${item ? 'Editar equipo' : 'Agregar equipo'}</h2>
+      modal(`${close}<h2>${title}</h2>
         <form id="combat-equipment"><div class="sheet-fields">${fields(common, record)}</div>
           <div class="sheet-fields" id="equipment-fields"></div>
           <p class="muted" id="equipment-damage-help" hidden>Si copiás el daño con atributo y mejora incluidos, elegí «Total de la hoja». Los efectos activos registrados se suman después.</p>
@@ -250,7 +287,7 @@ const CombatView = (() => {
         byId('equipment-damage-help').hidden = category.value !== 'weapon';
       };
       category.onchange = update;
-      byId('combat-back').onclick = () => inventory(character, onChange);
+      byId('combat-back').onclick = back;
       update();
       byId('combat-equipment').onsubmit = event => {
         event.preventDefault();
@@ -263,13 +300,13 @@ const CombatView = (() => {
         if (next.equipped) next.carried = true;
         CombatData.putItem(character, next);
         onChange('Equipo guardado');
-        inventory(character, onChange);
+        back();
       };
       if (item) byId('combat-remove').onclick = () => {
         if (!confirm('¿Quitar ' + item.name + ' del inventario de ' + character.name + '?')) return;
         character.inventory = character.inventory.filter(entry => entry.id !== item.id);
         onChange('Objeto quitado');
-        inventory(character, onChange);
+        back();
       };
     }
 
@@ -476,7 +513,7 @@ const CombatView = (() => {
       });
     }
 
-    return { overview, inventory, effects, result };
+    return { overview, weapons, inventory, effects, result };
   }
 
   return { create };
