@@ -1,7 +1,7 @@
 'use strict';
 
 const SDK_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/+esm';
-const PUBLIC_APP_URL = 'https://v3rdes.github.io/bard-companion/#campana';
+const PUBLIC_APP_URL = 'https://v3rdes.github.io/bard-companion/abrir.html';
 const byId = id => document.getElementById(id);
 let activeUI;
 let client;
@@ -96,7 +96,8 @@ byId('close-campaign').onclick = async () => {
 const configured = CampaignConfig.url.startsWith('https://') && CampaignConfig.publishableKey.startsWith('sb_publishable_');
 if (location.protocol.startsWith('http') && configured) {
   // La URL normal, los enlaces antiguos y la PWA siempre abren la misma campaña.
-  history.replaceState(null, '', location.pathname + location.search + '#campana');
+  const entryPath = location.pathname.replace(/\/abrir\.html$/, '/');
+  history.replaceState(null, '', entryPath + location.search + '#campana');
   byId('campaign-bar').classList.remove('hidden');
   byId('open-campaign').classList.add('hidden');
   startCampaign();

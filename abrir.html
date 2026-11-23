@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#121b2b" />
+  <meta name="description" content="Seguimiento de conjuros para bardos de Pathfinder primera edición" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" /><link rel="apple-touch-icon" href="./icon-192.png" />
+  <title>Bard Companion · Pathfinder 1e</title>
+  <link rel="stylesheet" href="./src/styles.css?app=17" />
+</head>
+<body>
+<main class="app" id="main">
+  <header class="top"><div><div class="eyebrow">✦ PF1E · GRIMORIO DE CAMPAÑA</div><h1>Bard Companion</h1><div class="subtitle" id="hero-subtitle"></div></div><div class="crest" aria-hidden="true">♫</div></header>
+  <p class="notice" id="sync-status" role="status" aria-live="polite"></p>
+  <p class="notice hidden" id="app-update-status" role="status"></p>
+  <div class="campaign-bar row hidden" id="campaign-bar">
+    <button class="btn sm" id="open-campaign">Campaña compartida</button>
+    <button class="btn sm hidden" id="close-campaign">Cerrar sesión en este dispositivo</button>
+  </div>
+  <section class="card" id="campaign-auth" aria-labelledby="campaign-title" hidden>
+    <h2 class="section-title" id="campaign-title">Campaña compartida</h2>
+    <p class="muted" id="campaign-status" role="status"></p>
+    <form id="campaign-login" method="post" hidden>
+      <div class="field"><label for="campaign-email">Correo de la mesa</label>
+        <input type="email" id="campaign-email" name="email" autocomplete="username" required>
+      </div>
+      <div class="field"><label for="campaign-password">Contraseña</label>
+        <input type="password" id="campaign-password" name="password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn primary" id="campaign-submit">Entrar</button>
+    </form>
+  </section>
+  <details id="browser-backup" hidden><summary>Recuperación de un respaldo anterior</summary>
+    <p class="muted">Los datos anteriores de este navegador se conservan como respaldo. La campaña compartida es la ficha que se usa en todos los dispositivos.</p>
+    <button class="btn sm" id="export-browser-backup">Exportar respaldo anterior</button>
+  </details>
+  <div id="app-workspace" hidden>
+  <div id="save-feedback"><p class="notice hidden" id="storage-warning" role="status"></p>
+    <button class="btn sm hidden" id="retry-campaign">Reintentar guardado</button></div>
+    <div class="reminders hidden" id="sync-conflict" role="alert">
+      <p id="sync-conflict-text"></p>
+      <div class="row"><button class="btn sm" id="sync-use-mine">Conservar mis cambios</button>
+      <button class="btn sm" id="sync-use-campaign">Usar cambios de la campaña</button></div>
+    </div>
+  <aside id="legacy-warning" class="reminders hidden" aria-label="Guardado de la versión anterior">
+    <p>Hay datos de la versión anterior pendientes de revisar.</p>
+    <div class="row"><button class="btn sm" id="recover-legacy">Recuperar como fichas nuevas</button>
+    <button class="btn sm" id="export-legacy">Exportar guardado anterior</button></div>
+  </aside>
+  <section class="party-bar" aria-label="Personajes">
+    <label for="character-select">Personaje activo</label>
+    <div class="row">
+      <select class="compact-select" id="character-select"></select>
+      <button class="btn sm" id="manage-party">Administrar personajes</button>
+    </div>
+  </section>
+  <p class="empty hidden" id="empty-party">Incorporá o desarchivá una ficha desde «Administrar personajes».</p>
+  <div id="character-content">
+  <nav class="row character-tools" aria-label="Ficha del personaje">
+    <button class="btn sm ghost" id="edit-profile">Editar perfil</button>
+    <button class="btn sm ghost" id="edit-sheet">Habilidades, dotes y rasgos</button>
+    <button class="btn sm" id="show-combat">Combate</button>
+    <button class="btn sm" id="show-weapons">Armas</button>
+    <button class="btn sm" id="show-inventory">Equipo</button>
+    <button class="btn sm" id="show-effects">Efectos</button>
+    <button class="btn sm" id="update-level">Actualizar nivel</button>
+  </nav>
+  <section class="dash" aria-label="Resumen"><div class="card"><div class="smalllabel">Nivel actual</div><div class="hero-number" id="summary-level">6</div><div class="smalllabel" id="summary-class">Bardo</div></div><div class="card"><div class="smalllabel">Conjuros conocidos</div><div class="hero-number" id="summary-known">14</div><div class="smalllabel">Incluye trucos</div></div><div class="card"><div class="smalllabel">Espacios disponibles</div><div class="hero-number" id="summary-left">10</div><div class="smalllabel">Sin contar trucos</div></div><div class="card"><div class="smalllabel">Carisma</div><div class="hero-number" id="summary-cha">20</div></div></section>
+  <div class="headrow"><h2 class="section-title">Espacios por día</h2><button class="btn sm" id="rest">↻ Descanso diario</button></div>
+  <section id="slot-grid" class="slot-grid" aria-label="Usos restantes por nivel"></section>
+  <p class="smalllabel" id="last-rest"></p>
+  <div id="level-reminder" class="reminders hidden"></div>
+  <div class="headrow" style="margin-top:30px"><h2 class="section-title">Conjuros conocidos</h2><button class="btn primary" id="add-spell">＋ Agregar conjuro</button></div>
+  <div class="toolbar"><input id="search" class="search" type="search" placeholder="Buscar conjuro, efecto o escuela…" aria-label="Buscar conjuros"/><nav class="filters" id="filters" aria-label="Filtrar por nivel"></nav></div>
+  <section class="spells" id="spell-list" aria-live="polite"></section>
+  </div>
+  <footer class="footer"><p>Los usos se descuentan por nivel del conjuro. Los trucos no gastan espacios.</p><p id="save-location">Las fichas se guardan en este navegador.</p>
+    <div class="row"><button class="btn sm ghost" id="export-data">Exportar respaldo</button>
+    <button class="btn sm ghost" id="import-data">Restaurar respaldo</button>
+    <button class="btn sm ghost" id="import-new">Importar como fichas nuevas</button>
+    <input id="import-file" type="file" accept="application/json,.json" class="hidden" aria-label="Importar respaldo JSON" /></div>
+    <p>Descripciones propias en español. Consultá las reglas de Pathfinder 1e en <a href="https://www.d20pfsrd.com/" target="_blank" rel="noopener noreferrer">d20PFSRD</a>. Herramienta no oficial.</p>
+  </footer>
+  </div>
+</main>
+<div id="modal-root"></div>
+<script defer src="./src/bard-rules.js?app=17"></script>
+<script defer src="./src/spell-catalog.js?app=17"></script>
+<script defer src="./src/party.js?app=17"></script>
+<script defer src="./src/combat-rules.js?app=17"></script>
+<script defer src="./src/combat-data.js?app=17"></script>
+<script defer src="./src/pathfinder-api.js?app=17"></script>
+<script defer src="./src/level-up.js?app=17"></script>
+<script defer src="./src/save-state.js?app=17"></script>
+<script defer src="./src/local-repository.js?app=17"></script>
+<script defer src="./src/campaign-config.js?app=17"></script>
+<script defer src="./src/sync-state.js?app=17"></script>
+<script defer src="./src/campaign-repository.js?app=17"></script>
+<script defer src="./src/party-view.js?app=17"></script>
+<script defer src="./src/combat-view.js?app=17"></script>
+<script defer src="./src/level-view.js?app=17"></script>
+<script defer src="./src/ui.js?app=17"></script>
+<script defer src="./src/app-updates.js?app=17"></script>
+<script defer src="./src/app.js?app=17"></script>
+</body>
+</html>
