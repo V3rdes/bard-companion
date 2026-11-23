@@ -12,11 +12,11 @@
 </head>
 <body>
 <main class="app" id="main">
-  <header class="top"><div><div class="eyebrow">✦ PF1E · GRIMORIO DE CAMPAÑA</div><h1>Bard Companion</h1><div class="subtitle" id="hero-subtitle">Bardo · Nivel 6 · Carisma 20</div></div><div class="crest" aria-hidden="true">♫</div></header>
+  <header class="top"><div><div class="eyebrow">✦ PF1E · GRIMORIO DE CAMPAÑA</div><h1>Bard Companion</h1><div class="subtitle" id="hero-subtitle"></div></div><div class="crest" aria-hidden="true">♫</div></header>
+  <p class="notice" id="sync-status" role="status" aria-live="polite"></p>
+  <p class="notice hidden" id="app-update-status" role="status"></p>
   <div class="campaign-bar row hidden" id="campaign-bar">
     <button class="btn sm" id="open-campaign">Campaña compartida</button>
-    <button class="btn sm hidden" id="open-local">Fichas locales</button>
-    <button class="btn sm hidden" id="reload-campaign">Actualizar fichas</button>
     <button class="btn sm hidden" id="close-campaign">Cerrar sesión en este dispositivo</button>
   </div>
   <section class="card" id="campaign-auth" aria-labelledby="campaign-title" hidden>
@@ -32,9 +32,18 @@
       <button type="submit" class="btn primary" id="campaign-submit">Entrar</button>
     </form>
   </section>
-  <div id="app-workspace">
+  <details id="browser-backup" hidden><summary>Recuperación de un respaldo anterior</summary>
+    <p class="muted">Los datos anteriores de este navegador se conservan como respaldo. La campaña compartida es la ficha que se usa en todos los dispositivos.</p>
+    <button class="btn sm" id="export-browser-backup">Exportar respaldo anterior</button>
+  </details>
+  <div id="app-workspace" hidden>
   <div id="save-feedback"><p class="notice hidden" id="storage-warning" role="status"></p>
     <button class="btn sm hidden" id="retry-campaign">Reintentar guardado</button></div>
+    <div class="reminders hidden" id="sync-conflict" role="alert">
+      <p id="sync-conflict-text"></p>
+      <div class="row"><button class="btn sm" id="sync-use-mine">Conservar mis cambios</button>
+      <button class="btn sm" id="sync-use-campaign">Usar cambios de la campaña</button></div>
+    </div>
   <aside id="legacy-warning" class="reminders hidden" aria-label="Guardado de la versión anterior">
     <p>Hay datos de la versión anterior pendientes de revisar.</p>
     <div class="row"><button class="btn sm" id="recover-legacy">Recuperar como fichas nuevas</button>
@@ -87,11 +96,13 @@
 <script defer src="./src/save-state.js"></script>
 <script defer src="./src/local-repository.js"></script>
 <script defer src="./src/campaign-config.js"></script>
+<script defer src="./src/sync-state.js"></script>
 <script defer src="./src/campaign-repository.js"></script>
 <script defer src="./src/party-view.js"></script>
 <script defer src="./src/combat-view.js"></script>
 <script defer src="./src/level-view.js"></script>
 <script defer src="./src/ui.js"></script>
+<script defer src="./src/app-updates.js"></script>
 <script defer src="./src/app.js"></script>
 </body>
 </html>

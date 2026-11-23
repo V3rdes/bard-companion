@@ -3,7 +3,7 @@
   "name": "Bard Companion — Pathfinder 1e",
   "short_name": "Bard Companion",
   "description": "Grimorio y seguimiento de espacios de conjuro para Pathfinder 1e",
-  "start_url": "./",
+  "start_url": "./#campana",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0b1320",

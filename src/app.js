@@ -1,129 +1,142 @@
 'use strict';
 
 const SDK_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/+esm';
-const CAMPAIGN_HASH = '#campana';
 const byId = id => document.getElementById(id);
+let activeUI;
+let client;
+let opening = false;
+let sdkAttempt = 0;
 
-function navigateTo(hash) {
-  location.hash = hash;
-  location.reload();
-}
+function syncStatus(text) { byId('sync-status').textContent = text; }
 
 async function startCampaign() {
-  const workspace = byId('app-workspace');
+  if (opening || activeUI) return;
   const login = byId('campaign-login');
   const status = byId('campaign-status');
   const submit = byId('campaign-submit');
-  const openLocal = byId('open-local');
-  const signOut = byId('close-campaign');
-  const reload = byId('reload-campaign');
-  let ui;
-
-  function leave(hash) {
-    ui?.allowNavigation();
-    navigateTo(hash);
-  }
-
-  byId('open-campaign').classList.add('hidden');
-  byId('hero-subtitle').textContent = '';
-  workspace.hidden = true;
-  openLocal.classList.remove('hidden');
-  openLocal.onclick = () => {
-    if (!ui || ui.canLeave()) leave('');
-  };
   byId('campaign-auth').hidden = false;
-  status.textContent = 'Conectando con Supabase…';
-
+  if (navigator.onLine === false) {
+    syncStatus('Sin conexión · La campaña se abrirá automáticamente al volver a conectarte.');
+    return;
+  }
+  opening = true;
   try {
-    const { createClient } = await import(SDK_URL);
-    const client = createClient(CampaignConfig.url, CampaignConfig.publishableKey, {
-      auth: { detectSessionInUrl: false },
-    });
+    status.textContent = 'Conectando con la campaña…';
+    if (!client) {
+      const { createClient } = await import(SDK_URL + (sdkAttempt++ ? '?retry=' + sdkAttempt : ''));
+      client = createClient(CampaignConfig.url, CampaignConfig.publishableKey, {
+        auth: { detectSessionInUrl: false },
+      });
+    }
 
     async function openWorkspace() {
-      login.hidden = true;
-      signOut.classList.remove('hidden');
-      status.textContent = 'Cargando fichas de la mesa…';
       const { data: campaigns, error } = await client.from('campaigns').select('id, name');
       if (error) throw error;
-      if (campaigns.length !== 1) {
-        status.textContent = 'La cuenta de la mesa debe estar vinculada a una campaña.';
-        return;
-      }
+      if (campaigns.length !== 1) throw new Error('La cuenta debe estar vinculada a una sola campaña.');
       const campaign = campaigns[0];
       const repository = CampaignRepository.create(client, campaign.id);
       const state = await repository.load();
+      let pending;
+      try { pending = repository.resumeDraft(); } catch {
+        byId('storage-warning').textContent = 'Hay un borrador anterior que no se pudo abrir. Se conserva en este navegador.';
+        byId('storage-warning').classList.remove('hidden');
+      }
+      login.hidden = true;
       byId('campaign-auth').hidden = true;
       byId('save-location').textContent = 'Campaña compartida · ' + campaign.name;
-      workspace.hidden = false;
-      reload.classList.remove('hidden');
-      ui = BardUI.mount(repository, { campaignState: state });
+      byId('app-workspace').hidden = false;
+      byId('close-campaign').classList.remove('hidden');
+      activeUI = BardUI.mount(repository, {
+        campaignState: pending ?? state, hasPending: Boolean(pending), onSyncStatus: syncStatus,
+      });
     }
-
-    signOut.onclick = async () => {
-      if (ui && !ui.canLeave()) return;
-      signOut.disabled = true;
-      workspace.inert = true;
-      byId('modal-root').inert = true;
-      try {
-        const { error } = await client.auth.signOut({ scope: 'local' });
-        if (error) throw error;
-        leave('');
-      } catch {
-        alert('No se pudo cerrar la sesión. Volvé a intentar.');
-      } finally {
-        signOut.disabled = false;
-        workspace.inert = false;
-        byId('modal-root').inert = false;
-      }
-    };
-    reload.onclick = () => {
-      if (ui.canLeave()) leave(CAMPAIGN_HASH);
-    };
 
     login.onsubmit = async event => {
       event.preventDefault();
-      const email = byId('campaign-email').value.trim();
-      const password = byId('campaign-password').value;
+      if (opening) return;
+      opening = true;
       submit.disabled = true;
       status.textContent = 'Entrando…';
       try {
-        const { error } = await client.auth.signInWithPassword({ email, password });
-        if (error) {
-          status.textContent = 'No se pudo entrar. Revisá el correo, la contraseña y la conexión.';
-          return;
-        }
+        const { error } = await client.auth.signInWithPassword({
+          email: byId('campaign-email').value.trim(), password: byId('campaign-password').value,
+        });
+        if (error) throw error;
         byId('campaign-password').value = '';
         await openWorkspace();
       } catch {
-        status.textContent = 'No se pudo abrir la campaña. Revisá la conexión y recargá.';
-      } finally {
-        submit.disabled = false;
-      }
+        status.textContent = 'No se pudo entrar. Revisá el correo, la contraseña y la conexión.';
+      } finally { opening = false; submit.disabled = false; }
     };
-
     const { data, error } = await client.auth.getSession();
     if (error) throw error;
     if (data.session) await openWorkspace();
     else {
-      status.textContent = 'Entrá con el correo y la contraseña compartidos por la mesa.';
+      status.textContent = 'Usá la cuenta compartida de la mesa. Vas a ver las mismas fichas en todos tus dispositivos.';
+      syncStatus('Una campaña · Guardado compartido entre dispositivos');
       login.hidden = false;
     }
   } catch {
-    status.textContent = 'No se pudo conectar con la campaña. Revisá la conexión o abrí las fichas locales.';
-  }
+    status.textContent = 'No se pudo conectar. Reintentando automáticamente…';
+    syncStatus('Esperando conexión con la campaña');
+  } finally { opening = false; }
 }
 
-const campaignConfigured = location.protocol.startsWith('http') &&
-  CampaignConfig.url.startsWith('https://') && CampaignConfig.publishableKey.startsWith('sb_publishable_');
+byId('close-campaign').onclick = async () => {
+  if (activeUI && !activeUI.canLeave()) return;
+  try {
+    const { error } = await client.auth.signOut({ scope: 'local' });
+    if (error) throw error;
+    activeUI?.allowNavigation();
+    location.reload();
+  } catch { syncStatus('No se pudo cerrar la sesión. Revisá la conexión.'); }
+};
 
-if (campaignConfigured) {
+const configured = CampaignConfig.url.startsWith('https://') && CampaignConfig.publishableKey.startsWith('sb_publishable_');
+if (location.protocol.startsWith('http') && configured) {
+  // La URL normal, los enlaces antiguos y la PWA siempre abren la misma campaña.
+  history.replaceState(null, '', location.pathname + location.search + '#campana');
   byId('campaign-bar').classList.remove('hidden');
-  byId('open-campaign').onclick = () => navigateTo(CAMPAIGN_HASH);
+  byId('open-campaign').classList.add('hidden');
+  startCampaign();
+  const retry = setInterval(() => {
+    if (!document.hidden && !activeUI && byId('campaign-login').hidden) startCampaign();
+  }, 10000);
+  window.addEventListener('online', startCampaign);
+  window.addEventListener('focus', startCampaign);
+  window.addEventListener('pagehide', () => clearInterval(retry), { once: true });
+} else if (location.protocol === 'file:') {
+  byId('app-workspace').hidden = false;
+  syncStatus('Archivo local · Este respaldo no está conectado a la campaña compartida.');
+  activeUI = BardUI.mount(LocalRepository.create());
+} else {
+  byId('campaign-auth').hidden = false;
+  byId('campaign-status').textContent = 'Falta configurar la conexión de la campaña.';
 }
-if (campaignConfigured && location.hash === CAMPAIGN_HASH) startCampaign();
-else BardUI.mount(LocalRepository.create());
 
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
-}
+// Las fichas antiguas nunca se borran ni se mezclan a ciegas con la campaña.
+try {
+  const raw = localStorage.getItem('bard-companion:save:v2') ?? localStorage.getItem('bard-companion:save:v1');
+  if (raw !== null) {
+    byId('browser-backup').hidden = false;
+    byId('export-browser-backup').onclick = () => {
+      const link = document.createElement('a');
+      const latest = localStorage.getItem('bard-companion:save:v2') ?? localStorage.getItem('bard-companion:save:v1') ?? raw;
+      const url = URL.createObjectURL(new Blob([latest], { type: 'application/json' }));
+      link.href = url;
+      link.download = 'bard-companion-respaldo-anterior.json';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+  }
+} catch {}
+
+AppUpdates.start({
+  canReload: () => activeUI ? activeUI.safeToReload() :
+    !byId('campaign-email').value && !byId('campaign-password').value,
+  onWaiting: () => {
+    byId('app-update-status').classList.remove('hidden');
+    byId('app-update-status').textContent = 'Actualización en espera · Tu edición y guardado se conservan.';
+  },
+  onReload: () => activeUI?.prepareReload(),
+});

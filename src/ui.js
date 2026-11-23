@@ -35,6 +35,7 @@ const BardUI = (() => {
 
   function closeModal() {
     byId('modal-root').innerHTML = '';
+    document.dispatchEvent(new Event('bard:modal-closed'));
   }
 
   function modal(html, label = 'Detalle del conjuro') {
@@ -46,7 +47,7 @@ const BardUI = (() => {
     backdrop.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', closeModal));
   }
 
-  function mount(repository, { campaignState } = {}) {
+  function mount(repository, { campaignState, hasPending = false, onSyncStatus = () => {} } = {}) {
     const combatView = CombatView.create({ modal, esc });
     const partyView = PartyView.create({ modal, esc, combatResult: combatView.result });
     const levelView = LevelView.create({ modal, esc });
@@ -56,7 +57,14 @@ const BardUI = (() => {
     let importingAsNew = false;
     const shared = campaignState !== undefined;
     let writing = false;
-    let unsaved = false;
+    let unsaved = hasPending;
+    let connected = navigator.onLine !== false;
+    let refreshing = false;
+    let conflicted = false;
+    let mutation = 0;
+    let activeView = null;
+    let leaving = false;
+    const editing = () => Boolean(byId('modal-root').querySelector('form, input, textarea, select'));
 
     try {
       state = campaignState ?? repository.load() ?? SaveState.fresh();
@@ -67,6 +75,78 @@ const BardUI = (() => {
 
     const character = () => SaveState.activeCharacter(state);
     const canCast = spell => spell.l === 0 || remainingSlots(character(), spell.l) > 0;
+
+    function reportSync() {
+      if (!shared) return;
+      const stamp = repository.updatedAt?.(character()?.id);
+      const date = stamp ? new Date(stamp) : null;
+      const saved = date && !Number.isNaN(date.valueOf()) ? ' · Guardado ' + date.toLocaleString('es-AR') : '';
+      onSyncStatus(writing ? 'Guardando en la campaña…' : conflicted ? 'Hay dos cambios sobre el mismo dato · Elegí cuál conservar' :
+        !connected ? 'Sin conexión · Mostrando la última ficha recibida; los cambios pendientes se conservan' :
+        unsaved ? 'Cambios pendientes · Reintentando el guardado automáticamente' :
+        editing() ? 'Edición en curso · Las actualizaciones esperan para proteger tu borrador' :
+        'Campaña compartida · Sincronizada automáticamente' + saved);
+    }
+
+    function protectOffline() {
+      if (!shared) return;
+      const allowed = '#show-combat, #show-weapons, #show-inventory, #show-effects, #edit-sheet, #export-data, #export-legacy, [data-detail], [data-filter], [data-close], #combat-back, #entry-back, #api-item-back';
+      document.querySelectorAll('#app-workspace button, #modal-root button').forEach(button => {
+        if (!connected && !button.matches(allowed)) {
+          if (!button.hasAttribute('data-offline-disabled')) button.dataset.offlineDisabled = String(button.disabled);
+          button.disabled = true;
+        } else if (button.hasAttribute('data-offline-disabled')) {
+          button.disabled = button.dataset.offlineDisabled === 'true';
+          delete button.dataset.offlineDisabled;
+        }
+      });
+    }
+
+    function openView(type, id) {
+      activeView = { type, id };
+      const c = character();
+      if (!c && type !== 'manage') { closeModal(); return; }
+      if (type === 'spell') detail(id);
+      else if (type === 'entries') partyView.entries(c, saveSheet);
+      else if (type === 'manage') partyView.manage(state, manageAction);
+      else combatView[type](c, saveSheet);
+      protectOffline();
+    }
+
+    function redrawView() {
+      if (!activeView || editing()) return;
+      const top = byId('modal-root').querySelector('.modal')?.scrollTop ?? 0;
+      openView(activeView.type, activeView.id);
+      const dialog = byId('modal-root').querySelector('.modal');
+      if (dialog) dialog.scrollTop = top;
+    }
+
+    function showConflicts(conflicts) {
+      conflicted = true;
+      byId('sync-conflict').classList.remove('hidden');
+      byId('sync-conflict-text').textContent = 'Otro dispositivo editó el mismo dato: ' + conflicts.slice(0, 4).join('; ') +
+        '. Los cambios independientes se integran automáticamente. Tu borrador se conserva.';
+    }
+
+    async function refresh() {
+      if (!shared || refreshing || writing || document.hidden) return;
+      refreshing = true;
+      const before = mutation;
+      try {
+        if (unsaved && !conflicted && !editing()) { await save(); return; }
+        const latest = await repository.fetchLatest();
+        connected = true;
+        if (before !== mutation || writing || unsaved || editing()) return;
+        if (repository.changed(latest)) {
+          latest.state.activeCharacter = state.activeCharacter;
+          latest.state.activeCharacter = Party.active(latest.state)?.id ?? null;
+          state = repository.adopt(latest);
+          render();
+          redrawView();
+        }
+      } catch { connected = false; }
+      finally { refreshing = false; protectOffline(); reportSync(); }
+    }
 
     function updateLegacyWarning() {
       try {
@@ -82,35 +162,58 @@ const BardUI = (() => {
       byId('app-workspace').inert = busy;
       byId('modal-root').inert = busy;
       byId('app-workspace').setAttribute('aria-busy', String(busy));
+      reportSync();
     }
 
     function setUnsaved(value) {
       if (!shared) return;
       unsaved = value;
       byId('retry-campaign').classList.toggle('hidden', !value);
+      reportSync();
     }
 
-    async function save(message, candidate = state, recoveredLegacy) {
+    async function save(message, candidate = state, recoveredLegacy, { preferLocal = false } = {}) {
+      mutation++;
+      const draftStored = !shared || repository.persistDraft(candidate);
       setWriting(true);
       try {
-        const result = repository.save(candidate, recoveredLegacy);
-        if (shared ? await result : result) {
+        async function reconcile() {
+          const merged = await repository.rebase(candidate, { preferLocal });
+          if (merged.conflicts.length) { showConflicts(merged.conflicts); return false; }
+          Object.assign(candidate, merged.state);
+          repository.persistDraft(candidate);
+          return true;
+        }
+        let result;
+        if (shared && unsaved && !await reconcile()) result = false;
+        else result = shared ? await repository.save(candidate) : repository.save(candidate, recoveredLegacy);
+        if (shared && result === false && !conflicted && await reconcile()) result = await repository.save(candidate);
+        if (result) {
+          connected = true;
+          conflicted = false;
+          if (shared) { repository.clearDraft(); byId('sync-conflict').classList.add('hidden'); }
           setUnsaved(false);
           showStorageWarning('');
           if (message) toast(message);
+          render();
+          redrawView();
           return true;
         }
         showStorageWarning(shared
-          ? 'Otro dispositivo cambió estas fichas. Exportá tus cambios y actualizá las fichas.'
+          ? 'El borrador está protegido. Los cambios pendientes se integrarán con la campaña.'
           : 'El guardado local cambió o no se pudo abrir. Exportá la ficha antes de recargar.');
       } catch {
+        connected = false;
         showStorageWarning(shared
-          ? 'No se pudo guardar en la campaña. Podés reintentar o exportar un respaldo.'
+          ? draftStored ? 'No se pudo guardar todavía. El borrador se conserva y se reintentará automáticamente.' :
+            'No se pudo guardar ni respaldar en este dispositivo. Conservá esta pantalla o exportá el respaldo antes de cerrar.'
           : 'No se pudo guardar localmente. Exportá un respaldo.');
       } finally {
         setWriting(false);
         updateLegacyWarning();
+        protectOffline();
       }
+      if (shared && candidate !== state) state = candidate;
       if (candidate === state) setUnsaved(true);
       return false;
     }
@@ -211,9 +314,11 @@ const BardUI = (() => {
           </div>
         </article>`).join('')
         : '<div class="empty">No hay conjuros en esta vista. Probá otro filtro o agregá uno nuevo.</div>';
+      protectOffline();
     }
 
     function detail(id) {
+      activeView = { type: 'spell', id };
       const c = character();
       const s = c.spells.find(spell => spell.id === id);
       if (!s) return;
@@ -457,10 +562,10 @@ const BardUI = (() => {
 
     byId('character-select').addEventListener('change', event => {
       if (!Party.select(state, event.target.value)) return;
-      save();
+      if (!shared || connected) save();
       resetView();
     });
-    byId('manage-party').onclick = () => partyView.manage(state, manageAction);
+    byId('manage-party').onclick = () => openView('manage');
 
     byId('slot-grid').addEventListener('click', event => {
       const button = event.target.closest('button');
@@ -500,11 +605,11 @@ const BardUI = (() => {
       render();
       return pending;
     }
-    byId('edit-sheet').onclick = () => partyView.entries(character(), saveSheet);
-    byId('show-combat').onclick = () => combatView.overview(character(), saveSheet);
-    byId('show-weapons').onclick = () => combatView.weapons(character(), saveSheet);
-    byId('show-inventory').onclick = () => combatView.inventory(character(), saveSheet);
-    byId('show-effects').onclick = () => combatView.effects(character(), saveSheet);
+    byId('edit-sheet').onclick = () => openView('entries');
+    byId('show-combat').onclick = () => openView('overview');
+    byId('show-weapons').onclick = () => openView('weapons');
+    byId('show-inventory').onclick = () => openView('inventory');
+    byId('show-effects').onclick = () => openView('effects');
     byId('update-level').onclick = () => {
       const selected = character();
       levelView.show(selected, {
@@ -591,6 +696,8 @@ const BardUI = (() => {
           throw new Error('Otro dispositivo cambió la campaña. Actualizá las fichas antes de restaurar.');
         }
         state = restored;
+        mutation++;
+        if (shared) repository.clearDraft();
         setUnsaved(false);
         showStorageWarning('');
         updateLegacyWarning();
@@ -608,13 +715,65 @@ const BardUI = (() => {
     render();
     if (shared) {
       byId('retry-campaign').onclick = () => save('Cambios guardados');
+      byId('sync-use-mine').onclick = () => {
+        conflicted = false;
+        save('Cambios integrados con la campaña', state, undefined, { preferLocal: true });
+      };
+      byId('sync-use-campaign').onclick = async () => {
+        if (writing) return;
+        setWriting(true);
+        try {
+          // Respaldo recuperable antes de descartar una edición en conflicto.
+          download(SaveState.serializeBackup(state), 'bard-companion-conflicto-');
+          const latest = await repository.fetchLatest();
+          latest.state.activeCharacter = state.activeCharacter;
+          state = repository.adopt(latest);
+          repository.clearDraft();
+          conflicted = false;
+          connected = true;
+          setUnsaved(false);
+          byId('sync-conflict').classList.add('hidden');
+          showStorageWarning('');
+          render();
+          redrawView();
+        } catch { connected = false; }
+        finally { setWriting(false); reportSync(); }
+      };
+      const observer = new MutationObserver(() => { protectOffline(); reportSync(); });
+      observer.observe(byId('modal-root'), { childList: true, subtree: true });
+      byId('modal-root').addEventListener('submit', event => {
+        if (!connected) { event.preventDefault(); event.stopImmediatePropagation(); }
+      }, true);
+      document.addEventListener('bard:modal-closed', () => { activeView = null; refresh(); });
+      window.addEventListener('online', refresh);
+      window.addEventListener('focus', refresh);
+      window.addEventListener('offline', () => { connected = false; protectOffline(); reportSync(); });
+      document.addEventListener('visibilitychange', refresh);
+      const timer = setInterval(refresh, 5000);
+      window.addEventListener('pagehide', () => { clearInterval(timer); observer.disconnect(); }, { once: true });
       window.addEventListener('beforeunload', event => {
-        if (writing || unsaved) event.preventDefault();
+        if (!leaving && (writing || unsaved || editing())) event.preventDefault();
       });
+      try {
+        const view = JSON.parse(sessionStorage.getItem('bard-companion:view-after-update'));
+        sessionStorage.removeItem('bard-companion:view-after-update');
+        if (view && ['entries', 'overview', 'weapons', 'inventory', 'effects', 'manage', 'spell'].includes(view.type)) openView(view.type, view.id);
+      } catch {}
+      reportSync();
+      if (hasPending) refresh();
     }
     return {
-      canLeave: () => !writing && (!unsaved || confirm('¿Salir con cambios pendientes? Podés exportarlos antes de salir.')),
-      allowNavigation: () => setUnsaved(false),
+      safeToReload: () => (!shared || connected) && !writing && !unsaved && !editing(),
+      prepareReload: async () => {
+        if (shared) {
+          try { await repository.fetchLatest(); }
+          catch { connected = false; protectOffline(); reportSync(); return false; }
+        }
+        try { sessionStorage.setItem('bard-companion:view-after-update', JSON.stringify(activeView)); } catch {}
+        return true;
+      },
+      canLeave: () => !writing && ((!unsaved && !editing()) || confirm('¿Salir con cambios pendientes? El guardado pendiente se conserva en este navegador.')),
+      allowNavigation: () => { leaving = true; setUnsaved(false); },
     };
   }
 

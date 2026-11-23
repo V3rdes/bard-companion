@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'bard-companion-static-';
-const CACHE = CACHE_PREFIX + 'v14';
+const CACHE = CACHE_PREFIX + 'v15';
 const ASSETS = [
   './',
   './index.html',
@@ -18,11 +18,13 @@ const ASSETS = [
   './src/save-state.js',
   './src/local-repository.js',
   './src/campaign-config.js',
+  './src/sync-state.js',
   './src/campaign-repository.js',
   './src/party-view.js',
   './src/combat-view.js',
   './src/level-view.js',
   './src/ui.js',
+  './src/app-updates.js',
   './src/app.js',
 ];
 
